@@ -1,0 +1,11 @@
+# dsh-paper-reader bundle patch.
+#
+# 本包不向 profile 根层插入任何行：全部行为都挂在 `presets/paper.patch.yml`
+# 插入的 `preset-paper` 之下，从而落在该 preset 自己的 scope 层里。
+# 这是刻意的设计——skill 与工具都只在「论文解读」模式下存在，其他 session
+# 的目录、提示词、工具集里看不到它们的任何痕迹。
+#
+# 若将来需要一条全局行（例如跨模式复用的服务），在这里 insert。
+#
+# 顶层必须是数组；只写注释会被解析成 null，所以这里显式给出空数组。
+[]

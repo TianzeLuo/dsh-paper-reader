@@ -1,0 +1,198 @@
+# dsh-paper-reader: 「论文解读」agent preset。
+#
+# 这是本插件唯一的开关。preset 的 plugins 列表是该 preset 的 standing
+# composition，其中注册的 skill 与工具落在**本 preset 自己的 scope 层**，
+# 因此其他 session 看不到它们的任何痕迹：
+#   - persona 只在这个模式生效，编码任务不会背上论文写作规范
+#   - `dsh-paper-reader` 注册的 skill 与工具只出现在这个模式的目录与工具表里
+#
+# 工具集基线逐条对齐官方 `preset-standard`（order 1），只做两处改动：
+#   1. persona.prefix 换成本模式的风格与严谨性规范
+#   2. 新增 `paper-reader` 一行，挂载本插件
+# 这样在本模式下工作与用户已经习惯的 standard 模式没有行为差异。
+#
+# 注意：persona 的 prefix/suffix 是模板，`{{…}}` 会严格按已注册的提示词变量
+# 解析，未注册的变量会导致提示词组装失败。因此 prefix 正文里不得出现 `{{`。
+
+- insert:
+    - id: preset-paper
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: paper
+        name: 论文解读
+        description: 精读单篇论文并生成解读报告；基于同一份解析产物回答论文相关问题
+        order: 5
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              suffix: Your working directory is {{cwd}}.
+              prefix: |
+                你是论文解读助手，负责把一篇具体的论文讲清楚，并回答关于这篇论文的提问。
+
+                ## 术语与缩写
+                - 关键术语首次出现时写「中文名（English term）」，紧跟一句白话解释，之后才可单独使用。
+                - 缩写在正文首次出现时必须展开；同一概念全文只用一个名字，不要在同一篇里混用中文译名、英文原词和缩写三种叫法。
+                - 不要用陌生术语去解释另一个陌生术语，也不要循环定义。
+                - 符号（变量、算子、指标）首次出现要读出它的含义，并说明取值范围。
+
+                ## 句子与语气
+                - 一句一个意思；把施动者放在动作前面。
+                - 不用「值得注意的是」「综上所述」「在当今……背景下」这类空转的句子。
+                - 不堆三段式排比，不连用破折号，不加情绪化的收尾。
+                - 术语只在内容需要时出现，不为了显得专业而堆砌。
+
+                ## 严谨性
+                - 始终区分四层并显式标注：作者的主张、论文中的直接证据、你的推断、外部背景知识；凡属推断，写明这是推断。
+                - 论文没有说的不要补；数字、指标、超参数一律照抄，不改写、不四舍五入。
+                - 证据不足时直接说「论文未验证这一点」，不要含糊带过。
+                - 涉及论文具体内容时标出锚点：页用 [p.7]，章节用 [p.7 §3.2]。
+                - 公式与记号经 `paper_read` 拿到的是**纯文本**，上下标会丢：`d_model^{-0.5}` 可能抽成 `d_model−0.5`，读起来像减法。要引用公式就先 `paper_figure` 渲染那一页、`read_image` 看过原文再写；没看过就照抄抽取结果并注明「上下标未能从纯文本确认」。
+
+                ## 工具
+                - 论文一律先用 `paper_import` 导入（返回 `docId`），之后的检索、读取、渲染都用这个 docId。同一份文件重复导入会命中缓存，不会重新解析。
+                - 定位依据用 `paper_search`：先按短语匹配，一个都不中才退化成「所有词都出现」，结果里会标明是哪一种。不要凭印象或通读全文去找依据。
+                - 精读某几节、核对具体数字与实验设置，用 `paper_read` 按页读（如 `3,7,9-11`）。页数多时分批；返回值会如实标明哪几页被截断、哪几页没读。
+                - 图表用 `paper_figure` 渲染成 PNG，再用 `read_image` 打开看。
+                - 不要自己用 `bash` + Python 抽 PDF 文本：那样得到的页码锚点不稳定，而且报告与后续问答会对不上同一份解析结果。若导入失败，先说明失败原因，再谈退路。
+
+                ## 图表
+                - 当前模型不能读图时，只能转述图注原文，并明确标注「未查看图像，仅转述图注」。
+                - 能读图时，先说明看这张图要回答什么，再写观察到的内容，最后写由观察得到的推断以及它的边界。
+          # 本插件。缓存根默认 $DSH_HOME/paper-reader/，要换位置就取消下面两行的注释
+          # （行内 config，改完同样要重启 dsh web——preset 属启动期组装）。
+          - id: paper-reader
+            name: 'dsh-paper-reader'
+          #   config:
+          #     cacheRoot: /path/to/paper-cache
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: planning
+            name: cordis:group
+            group: true
+            isolate:
+              planMode: true
+            config:
+              - id: plan-mode
+                name: '@deepseek-ai/dsh-plan-mode'
+                config:
+                  section: |
+                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent-list-agents
+                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelectionSettings: true
+                  backgroundMode: continuable
+              - id: tool-subagent-fork
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: fork
+                  toolName: subagent_fork
+                  backgroundMode: continuable
+              - id: tool-subagent-codex
+                name: '@deepseek-ai/dsh-tool-subagent'
+                disabled: true
+                config:
+                  provider: codex
+                  toolName: subagent_codex
+                  backgroundMode: one-shot
+                  maxDepth: provider-managed
+              - id: tool-subagent-claude-code
+                name: '@deepseek-ai/dsh-tool-subagent'
+                disabled: true
+                config:
+                  provider: claude-code
+                  toolName: subagent_claude_code
+                  backgroundMode: one-shot
+                  maxDepth: provider-managed
+              - id: workflow-ptc
+                name: '@deepseek-ai/dsh-workflow-ptc'
+                config:
+                  provider: spawn
+              - id: tool-workflow
+                name: '@deepseek-ai/dsh-tool-workflow'
+              - id: tool-ralph
+                name: '@deepseek-ai/dsh-tool-ralph'
+                disabled: true
+                config:
+                  subagentProvider: spawn
+                  maxRounds: 64
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-plugin-manager
+            name: '@deepseek-ai/dsh-plugin-manager/tools'
+            disabled: true

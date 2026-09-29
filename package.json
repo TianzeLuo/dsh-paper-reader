@@ -1,0 +1,55 @@
+{
+  "name": "dsh-paper-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH plugin: 论文解读模式 — 精读单篇论文生成解读报告，并基于同一份解析产物回答论文相关问题。以 agent preset 隔离，仅在选中该模式时生效。",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/s11phere/dsh-paper-reader.git"
+  },
+  "homepage": "https://github.com/s11phere/dsh-paper-reader#readme",
+  "bugs": {
+    "url": "https://github.com/s11phere/dsh-paper-reader/issues"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "presets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "paper",
+    "paper-reading",
+    "literature",
+    "agent-preset"
+  ],
+  "dependencies": {
+    "mupdf": "^1.28.1",
+    "yaml": "^2.8.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/paper.patch.yml"
+      ]
+    }
+  }
+}

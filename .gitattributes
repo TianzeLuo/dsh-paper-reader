@@ -1,0 +1,12 @@
+# 行尾统一为 LF。
+#
+# 本仓库的检出目录可能挂在 Windows 卷上（例如 WSL 里访问 /mnt/<盘符>），源码因此可能被
+# Windows 侧编辑器改写行尾；不声明的话会出现「内容没变、整文件却是 diff」的噪音。
+# 入库按 LF 存，检出也保持 LF——lib/ 与 test/ 是 Node ESM，presets/ 与 skills/ 是
+# YAML/Markdown，都接受 LF。
+* text=auto eol=lf
+
+# 二进制产物不做文本转换与 diff
+*.png binary
+*.pdf binary
+*.ico binary
