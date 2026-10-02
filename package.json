@@ -16,6 +16,7 @@
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -24,6 +25,7 @@
   "files": [
     "lib",
     "skills",
+    "levels",
     "presets",
     "cordis.patch.yml",
     "README.md"
@@ -38,7 +40,8 @@
     "paper",
     "paper-reading",
     "literature",
-    "agent-preset"
+    "agent-preset",
+    "reading-depth"
   ],
   "dependencies": {
     "mupdf": "^1.28.1",
@@ -49,6 +52,13 @@
       "patch": [
         "./cordis.patch.yml",
         "./presets/paper.patch.yml"
+      ]
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
   }

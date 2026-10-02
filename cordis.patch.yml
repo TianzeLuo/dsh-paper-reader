@@ -1,11 +1,30 @@
-# dsh-paper-reader bundle patch.
+# dsh-paper-reader bundle patch —— **控制面**（profile 根层）。
 #
-# 本包不向 profile 根层插入任何行：全部行为都挂在 `presets/paper.patch.yml`
-# 插入的 `preset-paper` 之下，从而落在该 preset 自己的 scope 层里。
-# 这是刻意的设计——skill 与工具都只在「论文解读」模式下存在，其他 session
-# 的目录、提示词、工具集里看不到它们的任何痕迹。
+# 这一行只做两件事：
 #
-# 若将来需要一条全局行（例如跨模式复用的服务），在这里 insert。
+#   1. 让 `package.json` 的 `dsh.client` 声明生效。`dsh-client-modules` 组装
+#      boot graph 时只遍历 `ctx.loader.entries()`（根层 bundle 行），**preset 的
+#      子树不在其中**（`PresetTree` 会把自己从 owner entry 的 `subtree` 上摘掉），
+#      所以档位控件只有走到这里才会被送进页面。
+#   2. 注册 `/api/dsh-paper-reader/level` 端点，供控件读写当前会话的档位。
 #
-# 顶层必须是数组；只写注释会被解析成 null，所以这里显式给出空数组。
-[]
+# 它**不注册任何模型可见的东西**：技能目录、五个工具与档位提示词段全部属于
+# «代理面»，挂在 `presets/paper.patch.yml` 的 `paper-reader-agent` 行上，
+# 由 DSH 的 scope 层天然隔离到 «论文解读» 模式。
+#
+# 两行都在本包自己的 patch 文件里声明，不要手写，也不要删掉其中任何一行：
+# 少了这一行没有 UI，少了 preset 那一行则论文模式没有技能和工具。
+#
+# `insert:` 行随包发布，`dsh plugin --profile web add <本包>` 会自动把它追加进该
+# profile 的 `dsh.profile.bundles`；**不要**再手写同 id 的 `- insert:`（重复会报
+# duplicate loader entry id）。装完重启 `dsh web`。
+
+- insert:
+    - id: paper-reader
+      name: 'dsh-paper-reader'
+      config:
+        # 必填。两个挂载点靠它区分：'control' = 这里，'agent' = preset 内。
+        role: control
+      # 缓存根默认 $DSH_HOME/paper-reader/（档位存储 levels.json 也在那里）。
+      # 要换位置就在下面补 cacheRoot；改完要重启 dsh web。
+      #   cacheRoot: /path/to/paper-cache

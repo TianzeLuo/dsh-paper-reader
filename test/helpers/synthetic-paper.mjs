@@ -24,17 +24,31 @@ function escapeText(value) {
  * 画多段——真实论文里「3.2.1」与标题之间往往隔着一段空隙，mupdf 会把它们拆成
  * 两个 line 元素，这正是最容易拼错、也最容易让标题识别失效的形态。
  *
+ * `rect: [x, y, w, h]` 画一个黑色实心矩形，用来当矢量插图（论文里的插图绝大
+ * 多数就是矢量图，不是位图）。它不产生文字，但会被 display list 收集到，图形
+ * 区域检测靠的就是这个信号。
+ *
  * `advance` 覆盖默认行距：默认留得很大，让每行各自成为一个 block；调小就能
  * 造出「同一段落的折行」，用来验证折行处的空格补齐。
  *
- * @param {{ text?: string, parts?: [number, string][], size: number, advance?: number, bold?: boolean }[]} lines
- *   自上而下的若干行。
+ * @param {{ text?: string, parts?: [number, string][], rect?: [number, number, number, number],
+ *   size?: number, advance?: number, bold?: boolean }[]} lines 自上而下的若干行。
  * @returns {string} PDF 内容流正文。
  */
 function contentStream(lines) {
   let y = 780
   let out = 'BT\n'
+  let drawings = ''
   for (const line of lines) {
+    if (line.rect !== undefined) {
+      // 画在文字之后：两者不重叠，顺序只影响 z 序。内容流里的 y 是 PDF 用户
+      // 空间（原点在左下），与 mupdf 报出来的 bbox（原点在左上）是上下翻转的，
+      // 这里按用户空间给坐标即可。
+      const [x, rectY, width, height] = line.rect
+      drawings += `0 0 0 rg\n${x} ${rectY} ${width} ${height} re f\n`
+      y -= line.advance ?? 0
+      continue
+    }
     const font = line.bold === true ? '/F2' : '/F1'
     for (const [x, text] of line.parts ?? [[60, line.text]]) {
       out += `1 0 0 1 ${x} ${y} Tm ${font} ${line.size} Tf (${escapeText(text)}) Tj\n`
@@ -43,7 +57,7 @@ function contentStream(lines) {
     // 检索片段都建立在 block 之上，并成一块会让断言失去意义。
     y -= line.advance ?? line.size + 20
   }
-  return `${out}ET\n`
+  return `${out}ET\n${drawings}`
 }
 
 /**
@@ -53,6 +67,7 @@ function contentStream(lines) {
  *   - 编号标题（`1 Introduction` / `2 Method` / `3.2 Multi-Head Attention`）
  *   - 无编号标题（`Abstract`）
  *   - 图注（`Figure 1:`）与表注（`Table 1:`）
+ *   - 一张矢量插图（第 2 页的黑色矩形，图注在它下方）
  *   - 一个到处出现的数字（28.7）与真实论文里常被追问的配置（8 张 P100）
  */
 export const PAPER_PAGES = [
@@ -60,12 +75,27 @@ export const PAPER_PAGES = [
     { text: 'Attention Is All You Need', size: 18 },
     { text: 'Ashish Vaswani, Noam Shazeer', size: 11 },
     { text: 'Abstract', size: 13 },
-    { text: 'We propose a new architecture that reaches 28.7 BLEU.', size: 11 },
+    // 一段真正的长正文：折行会被并进同一个块，因此这一块超过 140 字符。测验
+    // 「snippet 档只给命中处前后各 70 字」时必须有一块长过那个窗口。
+    {
+      text: 'We propose a new architecture that reaches 28.7 BLEU on the WMT 2014 translation',
+      size: 11,
+      advance: 12,
+    },
+    {
+      text: 'task, which is better than every previously published result and beats concurrent submissions.',
+      size: 11,
+    },
     { text: '1 Introduction', size: 14 },
-    { text: 'Recurrent models are slow and hard to parallelize.', size: 11 },
+    {
+      text: 'Recurrent models are slow and hard to parallelize, which prevents them from scaling to long sequences.',
+      size: 11,
+    },
   ],
   [
     { text: '2 Method', size: 14 },
+    // 图形占 y 690–740，光标推到 676 让图注落在它下方（图注在下是论文的惯例）
+    { rect: [60, 690, 220, 50], advance: 70 },
     { text: 'Figure 1: The Transformer architecture.', size: 10 },
     { text: 'We use eight attention heads.', size: 11 },
     { text: '3.2 Multi-Head Attention', size: 12 },
@@ -73,9 +103,14 @@ export const PAPER_PAGES = [
   ],
   [
     { text: '3 Experiments', size: 14 },
-    { text: 'Table 1: BLEU scores on WMT 2014.', size: 10 },
     { text: 'Our model reaches 28.7 BLEU as well.', size: 11 },
     { text: 'We trained on 8 NVIDIA P100 GPUs.', size: 11 },
+    { text: 'Table 1: BLEU scores on WMT 2014.', size: 10 },
+    // 表体放在图注下方、且是这一页最后的内容：表注在图上方同样是论文的常见
+    // 排法，检测要靠「惯例一侧找不到就往另一侧找」这一条覆盖
+    { text: 'Method BLEU', size: 9 },
+    { text: 'Transformer 28.4', size: 9 },
+    { text: 'Ours 27.3', size: 9 },
   ],
 ]
 

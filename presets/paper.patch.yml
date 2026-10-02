@@ -1,15 +1,20 @@
 # dsh-paper-reader: 「论文解读」agent preset。
 #
-# 这是本插件唯一的开关。preset 的 plugins 列表是该 preset 的 standing
-# composition，其中注册的 skill 与工具落在**本 preset 自己的 scope 层**，
-# 因此其他 session 看不到它们的任何痕迹：
-#   - persona 只在这个模式生效，编码任务不会背上论文写作规范
-#   - `dsh-paper-reader` 注册的 skill 与工具只出现在这个模式的目录与工具表里
+# 这个 preset 负责**模式的身份**（persona + 这份 standing composition），并且是
+# 本插件**模型可见面**的挂载点：`paper-reader-agent` 那一行注册技能目录、五个
+# 工具与档位提示词段。挂在这里的隔离是 DSH 的 scope 层天然给的——agent 的 scope
+# key 以本 preset 的 standing key 为父，别的模式的 agent 不在那条 scope 链上，
+# 看不到其中任何一件。所以本文件里**没有**任何模式判断代码。
 #
-# 工具集基线逐条对齐官方 `preset-standard`（order 1），只做两处改动：
-#   1. persona.prefix 换成本模式的风格与严谨性规范
-#   2. 新增 `paper-reader` 一行，挂载本插件
-# 这样在本模式下工作与用户已经习惯的 standard 模式没有行为差异。
+# 同一个包在 profile 根层还有一行（`cordis.patch.yml`，`role: control`），只干
+# 两件非模型可见的事：让浏览器半部的档位控件被 `dsh-client-modules` 组装进页面
+# （它只遍历根层 bundle 行，preset 子树不在其中），以及注册档位端点。
+# 两行都在本包自己的 patch 里声明。完整取舍见
+# `docs/design.md#档位控件为什么挂在-profile-根层`。
+#
+# 工具集基线逐条对齐官方 `preset-standard`（order 1），只做一处改动：
+# `persona.prefix` 换成本模式的风格与严谨性规范。这样在本模式下工作与用户已经
+# 习惯的 standard 模式没有行为差异。
 #
 # 注意：persona 的 prefix/suffix 是模板，`{{…}}` 会严格按已注册的提示词变量
 # 解析，未注册的变量会导致提示词组装失败。因此 prefix 正文里不得出现 `{{`。
@@ -32,9 +37,15 @@
 
                 ## 术语与缩写
                 - 关键术语首次出现时写「中文名（English term）」，紧跟一句白话解释，之后才可单独使用。
-                - 缩写在正文首次出现时必须展开；同一概念全文只用一个名字，不要在同一篇里混用中文译名、英文原词和缩写三种叫法。
-                - 不要用陌生术语去解释另一个陌生术语，也不要循环定义。
-                - 符号（变量、算子、指标）首次出现要读出它的含义，并说明取值范围。
+                - 缩写在正文首次出现时必须展开；同一概念全文只用一个名字，不要混用中文译名、英文原词和缩写三种叫法。
+                - **每个评价指标都要解释它在算什么**：FID、PSNR、LPIPS、IS、KID、FVD 这类指标首现时，用一两句说清它比较什么、大致怎么算、往哪个方向变算好、有无下界。只给名字加数字（「FID 降低 19%」）不算解释。同一指标的不同口径（gFID / rFID / iFID）要分开说，不能当成一个东西混用。
+                - 不要用陌生术语解释陌生术语，也不要循环定义。
+                - 符号（变量、算子、指标）首次出现要说明含义与取值范围。
+
+                ## 公式
+                - 一律写成 LaTeX：行内 `$...$`；独立成行时 `$$` 各自独占一行，块前后留空行。不要用代码块贴公式。
+                - 公式内用 LaTeX 命令而非 Unicode（`\alpha` 不写 `α`，`\times` 不写 `×`）；正文里的变量名也放进 `$...$`。
+                - `paper_read` 给的是纯文本，上下标会丢（`d_model^{-0.5}` 抽成 `d_model−0.5`，像减法）。引用前先 `paper_figure` + `read_image` 核对原页；看不清就写清语义并注明未能确认，**不要猜着补 `^{}`**。
 
                 ## 句子与语气
                 - 一句一个意思；把施动者放在动作前面。
@@ -47,24 +58,26 @@
                 - 论文没有说的不要补；数字、指标、超参数一律照抄，不改写、不四舍五入。
                 - 证据不足时直接说「论文未验证这一点」，不要含糊带过。
                 - 涉及论文具体内容时标出锚点：页用 [p.7]，章节用 [p.7 §3.2]。
-                - 公式与记号经 `paper_read` 拿到的是**纯文本**，上下标会丢：`d_model^{-0.5}` 可能抽成 `d_model−0.5`，读起来像减法。要引用公式就先 `paper_figure` 渲染那一页、`read_image` 看过原文再写；没看过就照抄抽取结果并注明「上下标未能从纯文本确认」。
 
                 ## 工具
-                - 论文一律先用 `paper_import` 导入（返回 `docId`），之后的检索、读取、渲染都用这个 docId。同一份文件重复导入会命中缓存，不会重新解析。
-                - 定位依据用 `paper_search`：先按短语匹配，一个都不中才退化成「所有词都出现」，结果里会标明是哪一种。不要凭印象或通读全文去找依据。
-                - 精读某几节、核对具体数字与实验设置，用 `paper_read` 按页读（如 `3,7,9-11`）。页数多时分批；返回值会如实标明哪几页被截断、哪几页没读。
-                - 图表用 `paper_figure` 渲染成 PNG，再用 `read_image` 打开看。
-                - 不要自己用 `bash` + Python 抽 PDF 文本：那样得到的页码锚点不稳定，而且报告与后续问答会对不上同一份解析结果。若导入失败，先说明失败原因，再谈退路。
+                - 五个工具一条链：`paper_import` 导入（先看它返回的论文地图，再决定读哪几页）→ `paper_search` 定位 → `paper_read` 按页读 → `paper_figures` 自动裁图 / `paper_figure` 手动裁图，后两者都要用 `read_image` 打开看。参数与返回值以各自的 description 为准。
+                - 不要自己用 `bash` + Python 抽 PDF 文本：那样得到的页码锚点不稳定，报告与后续问答会对不上同一份解析结果。导入失败时先说明原因，再谈退路。
 
                 ## 图表
-                - 当前模型不能读图时，只能转述图注原文，并明确标注「未查看图像，仅转述图注」。
-                - 能读图时，先说明看这张图要回答什么，再写观察到的内容，最后写由观察得到的推断以及它的边界。
-          # 本插件。缓存根默认 $DSH_HOME/paper-reader/，要换位置就取消下面两行的注释
-          # （行内 config，改完同样要重启 dsh web——preset 属启动期组装）。
-          - id: paper-reader
+                - 不能读图时只能转述图注原文，并明确标注「未查看图像，仅转述图注」。
+                - 能读图时，先说明看这张图要回答什么，再写观察，最后写由观察得到的推断及它的边界。
+          # 本插件的**代理面**（`role: agent`）：技能目录、五个工具、档位提示词段。
+          # 挂在这里，隔离由 scope 层天然保证——别的模式的 agent 不在本 preset 的
+          # scope 链上，看不到其中任何一件，不需要任何运行期判断。
+          #
+          - id: paper-reader-agent
             name: 'dsh-paper-reader'
-          #   config:
-          #     cacheRoot: /path/to/paper-cache
+            config:
+              # 必填，不要删：它区分本包的两个挂载点。
+              role: agent
+              # 缓存根默认 $DSH_HOME/paper-reader/（档位存储 levels.json 也在那里）。
+              # 要换位置就在这一层加一行；改完要重启 dsh web（preset 属启动期组装）。
+              # cacheRoot: /path/to/paper-cache
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:

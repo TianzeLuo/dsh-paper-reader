@@ -1,5 +1,5 @@
 /**
- * 四个宿主工具的定义与行为测试。
+ * 五个宿主工具的定义与行为测试。
  *
  * 重点是注册表契约——工具定义是**手写**的（不能 import `defineTool`，理由见
  * `lib/tools.js` 顶部），所以「schema 只用了受支持的关键字」「入参校验真的会拦」
@@ -10,7 +10,7 @@
  * fixture 用 mkdtemp 建在临时目录里，按仓库规范不回收。
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -49,9 +49,15 @@ async function importFixture(paths) {
   return result
 }
 
-test('四个工具：名字与注册顺序固定', () => {
+test('五个工具：名字与注册顺序固定', () => {
   const { tools } = fixture()
-  assert.deepEqual([...tools.keys()], ['paper_import', 'paper_search', 'paper_read', 'paper_figure'])
+  assert.deepEqual([...tools.keys()], [
+    'paper_import',
+    'paper_search',
+    'paper_read',
+    'paper_figure',
+    'paper_figures',
+  ])
 })
 
 test('每个工具的定义形状符合注册表契约', () => {
@@ -86,10 +92,23 @@ test('每个工具的必填参数与文档一致', () => {
   assert.deepEqual(tools.get('paper_search').parameters.required, ['docId', 'query'])
   assert.deepEqual(tools.get('paper_read').parameters.required, ['docId', 'pages'])
   assert.deepEqual(tools.get('paper_figure').parameters.required, ['docId', 'pages'])
+  assert.deepEqual(tools.get('paper_figures').parameters.required, ['docId'])
   // 可选参数不能出现在 required 里，否则模型每次都得编一个值
-  assert.deepEqual([...tools.get('paper_search').parameters.required].includes('limit'), false)
-  assert.deepEqual([...tools.get('paper_read').parameters.required].includes('maxChars'), false)
-  assert.deepEqual([...tools.get('paper_figure').parameters.required].includes('dpi'), false)
+  for (const [name, optional] of [
+    ['paper_search', 'limit'],
+    ['paper_search', 'context'],
+    ['paper_read', 'maxChars'],
+    ['paper_figure', 'dpi'],
+    ['paper_figure', 'bbox'],
+    ['paper_figures', 'dpi'],
+    ['paper_figures', 'pages'],
+  ]) {
+    assert.equal(
+      tools.get(name).parameters.required.includes(optional),
+      false,
+      `${name}.${optional} 不该是必填`,
+    )
+  }
 })
 
 test('入参校验：缺必填、多出未知参数、类型不对都会被拦下', async () => {
@@ -132,6 +151,13 @@ test('paper_import：导入成功，返回值合规，render 给出 docId', asyn
   assert.match(rendered[0].text, /页数: 3/u)
   // 元数据缺失时必须说清楚，而不是留一行空白
   assert.match(rendered[0].text, /PDF 未内嵌标题|未内嵌/u)
+
+  // 导入就要给出论文地图：章节与图表清单，让模型不必先通读
+  assert.ok(result.sections.some((section) => section.anchor === '[p.1 §1]'), '缺少 §1')
+  assert.ok(result.figures.some((figure) => figure.label === 'Fig.1' && figure.page === 2))
+  assert.ok(result.figures.some((figure) => figure.label === 'Table1' && figure.kind === 'table'))
+  assert.match(rendered[0].text, /章节（/u)
+  assert.match(rendered[0].text, /图表（/u)
 })
 
 test('paper_import：重复导入复用缓存，返回值仍然合规', async () => {
@@ -299,14 +325,15 @@ test('paper_figure：请求页数超过单次上限时抛错', async () => {
   assert.equal(first.figures.length + second.figures.length, 9)
 })
 
-test('docId 不存在时四个工具都报出可读的错误', async () => {
+test('docId 不存在时五个工具都报出可读的错误', async () => {
   const { tools } = fixture()
   await assert.rejects(tools.get('paper_search').execute({ docId: 'nope', query: 'x' }), /没有这篇论文的导入记录/u)
   await assert.rejects(tools.get('paper_read').execute({ docId: 'nope', pages: '1' }), /没有这篇论文的导入记录/u)
   await assert.rejects(tools.get('paper_figure').execute({ docId: 'nope', pages: '1' }), /没有这篇论文的导入记录/u)
+  await assert.rejects(tools.get('paper_figures').execute({ docId: 'nope' }), /没有这篇论文的导入记录/u)
 })
 
-test('缓存根可被 config 覆盖，且四个工具共用同一个根', async () => {
+test('缓存根可被 config 覆盖，且各工具共用同一个根', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-paper-reader-tools-'))
   const pdfPath = join(dir, 'paper.pdf')
   writeFileSync(pdfPath, syntheticPaper())
@@ -316,6 +343,155 @@ test('缓存根可被 config 覆盖，且四个工具共用同一个根', async 
   const imported = await tools.get('paper_import').execute({ source: pdfPath })
   assert.equal(imported.cacheDir, join(cacheRoot, imported.docId))
 
-  const searched = await tools.get('paper_search').execute({ docId: imported.docId, query: 'Method' })
+  const searched = await tools.get('paper_search').execute({ docId: imported.docId, query: 'eight attention' })
   assert.equal(searched.hits.length, 1, '检索必须落在同一个缓存根上')
+})
+
+test('paper_search：context 决定每条命中带多少上下文', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_search')
+
+  // 挑一个命中在长块里的词：块长 161 字符，snippet 档只会给命中处前后各 70 字
+  const snippet = await definition.execute({ docId, query: 'previously published', context: 'snippet' })
+  const block = await definition.execute({ docId, query: 'previously published', context: 'block' })
+  const window = await definition.execute({ docId, query: 'previously published', context: 'window' })
+
+  assertOutput(definition, snippet)
+  assert.equal(snippet.context, 'snippet')
+  assert.ok(
+    block.hits[0].text.length > snippet.hits[0].text.length,
+    'block 档必须比 snippet 档给得多',
+  )
+  assert.ok(
+    window.hits[0].text.length > block.hits[0].text.length,
+    'window 档要把相邻块接上，因此比单块更长',
+  )
+  assert.match(window.hits[0].text, /Abstract|Introduction/u, 'window 应当把相邻块带进来')
+
+  // 默认档是 window：问答里最常见的失败是「只知道提到了，不知道上下文怎么讲」
+  const fallback = await definition.execute({ docId, query: 'previously published' })
+  assert.equal(fallback.context, 'window')
+
+  await assert.rejects(
+    definition.execute({ docId, query: 'previously published', context: '全文' }),
+    /context 只能是/u,
+  )
+})
+
+test('paper_figure：给 bbox 就只裁那一块，返回值合规', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_figure')
+  const result = await definition.execute({
+    docId,
+    pages: '2',
+    dpi: 144,
+    bbox: '60,100,280,150',
+    label: 'manual',
+  })
+
+  assertOutput(definition, result)
+  const [figure] = result.figures
+  assert.deepEqual(figure.bbox, [60, 100, 280, 150])
+  assert.match(figure.file, /^manual@144\.png$/u)
+  // (280-60) * 144/72 = 440，(150-100) * 144/72 = 100
+  assert.equal(figure.width, 440)
+  assert.equal(figure.height, 100)
+  assert.match(definition.output.render({}, result)[0].text, /裁自/u)
+
+  await assert.rejects(
+    definition.execute({ docId, pages: '2', bbox: '1,2,3' }),
+    /bbox 要写成/u,
+  )
+  await assert.rejects(
+    definition.execute({ docId, pages: '2-3', bbox: '0,0,10,10' }),
+    /pages 只能给一页/u,
+  )
+  await assert.rejects(
+    definition.execute({ docId, pages: '2', bbox: '0,0,900,900' }),
+    /超出了第 2 页/u,
+  )
+})
+
+test('paper_figure：bbox 压到图注时自动收紧，并把图注原文交回报告', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_figure')
+  // 合成 fixture 第 2 页的图注在 y 155–168，这里的底边 170 越过了它
+  const result = await definition.execute({ docId, pages: '2', dpi: 144, bbox: '60,100,280,170' })
+
+  assertOutput(definition, result)
+  const [figure] = result.figures
+  assert.equal(figure.bbox[3], 153, '返回值里的 bbox 必须是收紧后的，不能还是请求值')
+  assert.equal(figure.clippedCaptions.length, 1, '被排除的图注要如实报出来')
+  assert.match(figure.clippedCaptions[0], /Fig\.1/u)
+  assert.match(figure.captions[0], /Transformer architecture/u, '邻近图注原文要交给模型写进报告')
+
+  const rendered = definition.output.render({}, result)[0].text
+  assert.match(rendered, /排除了/u, '渲染里要说明裁切框被收紧过')
+  assert.match(rendered, /写在报告里图片的下方/u, '图注该放哪里必须写清楚')
+})
+
+test('paper_figures：按图注自动裁图，写进指定目录并给出文件名', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_figures')
+  const outputDir = join(paths.dir, 'assets')
+  const result = await definition.execute({ docId, dpi: 144, outputDir })
+
+  assertOutput(definition, result)
+  assert.equal(result.outputDir, outputDir)
+  const figure = result.figures.find((item) => item.label === 'Fig.1')
+  assert.ok(figure !== undefined, '应当裁出 Figure 1')
+  assert.equal(figure.page, 2)
+  assert.equal(figure.detection, 'display-list')
+  assert.match(figure.file, /^fig1_p002@144\.png$/u)
+  assert.equal(figure.path, join(outputDir, figure.file))
+  assert.ok(existsSync(figure.path), 'PNG 必须真的写出来了')
+  // 合成 fixture 里的那块矩形宽 220pt，144dpi 下约 440px
+  assert.ok(figure.width >= 400 && figure.width <= 470, `宽度不对：${figure.width}`)
+  assert.ok(figure.height >= 90 && figure.height <= 130, `高度不对：${figure.height}`)
+
+  const rendered = definition.output.render({}, result)[0].text
+  assert.match(rendered, /图注：/u)
+  assert.match(rendered, /read_image/u, '必须提示先看一眼裁切结果')
+})
+
+test('paper_figures：相对 outputDir 拿不到会话目录时报错，有目录时按它解析', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_figures')
+
+  await assert.rejects(
+    definition.execute({ docId, outputDir: 'assets' }),
+    /拿不到会话工作目录/u,
+  )
+  const result = await definition.execute(
+    { docId, outputDir: 'assets' },
+    { agent: { session: { meta: { cwd: paths.dir } } } },
+  )
+  assert.equal(result.outputDir, join(paths.dir, 'assets'))
+})
+
+test('paper_figures：pages 过滤、max 上限与参数范围', async () => {
+  const paths = fixture()
+  const { docId } = await importFixture(paths)
+  const definition = paths.tools.get('paper_figures')
+
+  const page2 = await definition.execute({ docId, pages: '2' })
+  assert.deepEqual(
+    page2.figures.map((figure) => figure.label),
+    ['Fig.1'],
+  )
+
+  const capped = await definition.execute({ docId, max: 1 })
+  assert.equal(capped.figures.length, 1)
+  assert.equal(capped.omitted, 1)
+
+  await assert.rejects(definition.execute({ docId, max: 0 }), /max 必须在 1 到 64 之间/u)
+  await assert.rejects(definition.execute({ docId, dpi: 10 }), /dpi 必须在 36 到 600 之间/u)
+  // pages 走的是正文那套页码解析：写错要报错，而不是静默筛成空集
+  await assert.rejects(definition.execute({ docId, pages: 'abc' }), /看不懂的页码写法/u)
+  await assert.rejects(definition.execute({ docId, pages: '9' }), /越界/u)
 })
