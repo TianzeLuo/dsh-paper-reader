@@ -207,7 +207,6 @@ preset 行的既有局限，在不含本插件的基线 profile 上就能复现�
 ## 0.2.2 上的实测记录
 
 2026-11-13 在一个隔离实例（独立 `DSH_HOME`、端口 3195、不碰日常 3080）上装本插件，本模式能选中、
-档位控件「速览 / 解读 / 深读」正常渲染，`GET /api/dsh-paper-reader/level` 对空白会话与标准模式会话都回 `NOT_PAPER`，控制台无 error/warning、无未捕获异常、无失败请求。截图：
-[浅色](screenshots/compat/dsh-paper-reader-0.2.2-light.png) · [深色](screenshots/compat/dsh-paper-reader-0.2.2-dark.png)。
+档位控件「速览 / 解读 / 深读」正常渲染，`GET /api/dsh-paper-reader/level` 对空白会话与标准模式会话都回 `NOT_PAPER`，控制台无 error/warning、无未捕获异常、无失败请求。亮/暗两套验证截图属本机证据，不入库。
 
 同轮实测还发现：preset 里那行早已被宿主删除的 `list_agents` 子插件会让整个预设装载失败（预设列表显示 broken、该模式开不了会话），已删掉——这个工具在 0.2.2 由 `dsh-tool-subagent-control` 自己注册。

@@ -59,9 +59,11 @@ credentials*.yaml
 credentials*.yml
 
 # 本机证据与采集产物：几何 JSON、DOM dump、截图一律不入库
-# 只放行散文文档与经审的展示图；`docs/screenshots/compat/` 是逐次普查留档的展示图，
-# 没有本机路径/会话标题，按普查要求入库
+# 只放行散文文档与经审的展示图（docs/images/）
 docs/*
 !docs/*.md
 !docs/images/
-!docs/screenshots/
+# 显式拦住证据类路径：即使上面的白名单将来被放宽，这些也仍然不入库
+docs/screenshots/
+docs/capture/
+docs/**/*.json
