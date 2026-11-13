@@ -62,6 +62,9 @@ pnpm install
 dsh plugin --profile web add <本包目录>
 ```
 
+支持的 DSH 区间是 `>=0.2.2-rc.3`（`package.json` 顶层的 `engines.dsh`，装载与安装时由宿主校验，
+不满足会直接拒绝装载）；已实测版本 `0.2.2-rc.3`（2026-11-13）。
+
 装完重启 `dsh web`：preset 与根层 bundle 都属启动期组装。本包同时出现在两处——
 `cordis.patch.yml` 插根层 bundle 行（`role: control`，让控件进页面），`presets/paper.patch.yml`
 插 preset 行（`role: agent`，提供模式身份与模型可见面）。`dsh plugin add` 会自动带上这两层，

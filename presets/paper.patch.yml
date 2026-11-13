@@ -150,14 +150,14 @@
             config:
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  # 0.2.2 的 tool-subagent 只认 modelSelection；旧键 modelSelectionSettings
+                  # 会被静默忽略（子代理的模型选择因此在 0.2.2 上失效），故换成新键。
+                  modelSelection: true
                   backgroundMode: continuable
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'

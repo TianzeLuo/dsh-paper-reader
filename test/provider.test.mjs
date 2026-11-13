@@ -17,6 +17,7 @@ import assert from 'node:assert/strict'
 
 import { LEVEL_ROUTE, apply, createProvider, name } from '../lib/index.js'
 import { levelStoreAt } from '../lib/level-store.js'
+import { presetOf } from '../lib/preset-gate.js'
 
 /** 建一个临时技能根目录，写入若干技能包。 */
 function fixtureRoot(skills) {
@@ -370,4 +371,46 @@ test('档位端点：只有本模式的会话能读写；冷会话（回到旧�
 
 test('插件导出契约', () => {
   assert.equal(name, 'paper-reader')
+})
+
+test('档位判定：优先 owner 域服务，旧宿主退回注册表级 stateOf，读不到一律保守拒绝', () => {
+  const session = { id: 'paper-session' }
+
+  // 0.2.2 的公开读法：`agentPresets.presetForSession(session)` → `string | null`。
+  const presetsHost = {
+    get: (service) => (service === 'agentPresets' ? { presetForSession: (s) => (s?.id === 'paper-session' ? 'paper' : null) } : undefined),
+  }
+  assert.equal(presetOf(presetsHost, session), 'paper')
+  assert.equal(presetOf(presetsHost, { id: 'another-session' }), undefined, 'null 与「不是本模式」同解')
+  assert.equal(presetOf(presetsHost, undefined), undefined)
+  assert.equal(presetOf(presetsHost, null), undefined)
+
+  // 两个服务同时在场时以 owner 域服务为准：注册表级读法只剩退路，读数不再被采信。
+  const bothHost = {
+    get: (service) => {
+      if (service === 'agentPresets') return { presetForSession: () => 'paper' }
+      if (service === 'sessionProjections') return { stateOf: () => 'standard' }
+      return undefined
+    },
+  }
+  assert.equal(presetOf(bothHost, session), 'paper')
+
+  // 旧宿主：只有注册表级 stateOf，行为与升级前逐字一致（含「原始值直接判空」）。
+  const legacyHost = {
+    get: (service) => (service === 'sessionProjections' ? { stateOf: (s) => (s?.id === 'paper-session' ? 'paper' : 'standard') } : undefined),
+  }
+  assert.equal(presetOf(legacyHost, session), 'paper')
+  assert.equal(presetOf(legacyHost, { id: 'code-session' }), 'standard')
+  assert.equal(presetOf(legacyHost, { id: 'code-session' }) === 'paper', false)
+
+  // 抛错与缺席都只当作「不是本模式」：装载期与请求期都不能把端点带崩。
+  const throwing = {
+    get: (service) =>
+      service === 'agentPresets'
+        ? { presetForSession() { throw new Error('registration is still pending') } }
+        : { stateOf() { throw new Error('key "agentPreset" is not registered') } },
+  }
+  assert.equal(presetOf(throwing, session), undefined)
+  assert.equal(presetOf({ get: () => undefined }, session), undefined)
+  assert.equal(presetOf({}, session), undefined, '没有 get 的上下文也不能抛')
 })

@@ -164,6 +164,24 @@ Unicode 上下标」列为阻断项，但没有核对过的 `^{}` 在文本层�
 模型可见面**不依赖这个判断**：技能与工具挂在 preset 的 scope 层上，隔离由 DSH 的 scope 链给出，
 与控件读到什么无关。`lib/preset-gate.js` 只在档位端点上用（控制面，端点 URL 可猜测，所以逐请求校验）。
 
+## 档位判定读 preset 的 owner 服务，不再只认注册表
+
+**限制。** 「这个会话是不是论文解读模式」要读会话的 `agentPreset` 投影。0.2.1-rc.2 起（升级指南
+`session-projection-handles`）**注册表级** `sessionProjections.stateOf(session, key)` 已被弃用，
+公开等价读法是 owner 域服务上的 `ctx.agentPresets.presetForSession(session)`：返回
+`string | null`，`null` 表示这条会话没有记录过 preset。
+
+**怎么做。** `lib/preset-gate.js` 的 `presetOf` 按**特性探测**选读法：宿主有
+`presetForSession` 就用它，没有才退回注册表级 `stateOf`。两条路径的判据相同（非空字符串才等于本
+模式），任何一侧缺席、抛错或返回 `null` 都只是「不是本模式」，装载期与请求期都不抛错。
+
+**为什么留着旧读法。** 0.2.1-rc.1 及更早的宿主没有 `agentPresets` 服务，删掉退路会让这些部署的
+档位控件整体失效；旧读法只是被弃用，仍然可读。弃用期结束时删掉 `presetOf` 里的 `stateOf` 分支
+即可，端点语义不变（见「档位控件只认会话投影里的 agentPreset」一节，那里写的保守拒绝也一并保留）。
+
+**这意味着什么。** 0.2.2 起控制面不再走弃用路径。实测（0.2.2-rc.3、独立 `DSH_HOME`）档位的读、
+写与冷会话判定都与升级前一致；只在**没有** `agentPresets` 的部署上才会走旧读法。
+
 ## 档位文件不随会话归档清理
 
 `$DSH_HOME/paper-reader/levels.json` 里的记录只增不删：会话结束后那条 `sessionId -> 档位` 仍然留着。

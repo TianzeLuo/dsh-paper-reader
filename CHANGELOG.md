@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+### 变更：兼容 DSH 0.2.2 的投影读法
+
+- **档位判定不再只认注册表。** 0.2.1-rc.2 起注册表级 `sessionProjections.stateOf()` 被弃用，改为
+  优先读 preset 的 owner 服务 `ctx.agentPresets.presetForSession()`，旧读法作为特性探测的退路保留
+  （0.2.1-rc.1 及更早的宿主仍可用）。判据与保守拒绝不变，读不到仍按「不是本模式」处理。取舍见
+  [已知限制](docs/limitations.md#档位判定读-preset-的-owner-服务不再只认注册表)。
+- **补 `engines.dsh` 版本闸门。** `package.json` 顶层声明 `>=0.2.2-rc.3`（本仓库定稿口径：只写实测
+  通过的下界、不写上界）：宿主版本不满足时拒绝装载，而不是带病静默运行。
+
 ### 修复：回到历史会话时报「档位读取失败」
 
 - **档位端点只认活着的会话。** `ctx.sessions.get()` 只返回 Agent 已激活的会话，而 Web 里点开一条
