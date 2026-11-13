@@ -57,3 +57,9 @@ tmp/
 *.key
 credentials*.yaml
 credentials*.yml
+
+# 本机证据与采集产物：几何 JSON、DOM dump、截图一律不入库
+# 只放行散文文档与经审的展示图
+docs/*
+!docs/*.md
+!docs/images/

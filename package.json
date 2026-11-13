@@ -7,11 +7,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/s11phere/dsh-paper-reader.git"
+    "url": "git+https://github.com/TianzeLuo/dsh-paper-reader.git"
   },
-  "homepage": "https://github.com/s11phere/dsh-paper-reader#readme",
+  "homepage": "https://github.com/TianzeLuo/dsh-paper-reader#readme",
   "bugs": {
-    "url": "https://github.com/s11phere/dsh-paper-reader/issues"
+    "url": "https://github.com/TianzeLuo/dsh-paper-reader/issues"
   },
   "main": "./lib/index.js",
   "exports": {

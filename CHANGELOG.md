@@ -26,7 +26,7 @@
 - **不退回 `header.agentPreset`。** 实测本机三条论文会话的 header 都写着 `standard`，其中两条的
   日志里有 `agent-preset/selected = paper`（用户在首个 turn 之前换过档）——按 header 判会把这些
   会话的控件一起废掉，按投影判才对。这条实测记录写进了
-  [设计与取舍](docs/design.md#档位端点为什么必须同时认-live-与冷会话)。
+  [开发文档](docs/development.md#关键取舍看起来能简化其实不能)。
 - **客户端加退避重试**（3 次，400ms 起）。控件随会话视图挂载，而宿主是异步把会话读出来的；读一次
   就放弃会让失败变得随机。宿主说 `NOT_PAPER` 时整块收掉不报错，其余失败重试用尽才显示错误。
 - 端点语义：端点上「会话不存在」与「不是本模式」合流为 `NOT_PAPER`（原先分别是 `NO_SESSION` 与
@@ -87,7 +87,7 @@
   **五个工具因此在别的模式里彻底消失**（`ctx.tools.schemas()` 的全局视角也看不到），换 preset 时
   可见面随 scope 链正确进出。第一版曾把模型可见面挂在根层再用 `isPaperAgent` 逐点过滤，现已整体
   删除：那套做法有漏点、挡不住全局视图，且换 preset 时会留下错误的可见面。实测数据与取舍见
-  [设计与取舍](docs/design.md#早先的做法为什么被删掉了)。
+  [开发文档](docs/development.md#两个挂载点改宿主前必读)。
 - **不再声明静态 `inject`**：两个角色共用它，而根层那一行必须无条件激活，否则控件会随别的插件
   缺席而从页面消失。`systemPrompt` 与 `connection` 改为 `ctx.inject([...], scope => …)` 延迟注入。
 - **`createProvider` 不再自己做模式判断**（`list()` 不再返回空数组、`get()` 不再抛错）：隔离由
@@ -170,4 +170,4 @@ persona、技能与工具。
 抽取中丢失；章节锚点粒度取决于论文模板（ICLR 的小型大写 `\subsection` 只能标到 `§5`）；图注只按
 形态识别。
 
-[0.1.0]: https://github.com/s11phere/dsh-paper-reader/releases/tag/v0.1.0
+[0.1.0]: https://github.com/TianzeLuo/dsh-paper-reader/releases/tag/v0.1.0
