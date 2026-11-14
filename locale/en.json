@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Paper reader",
+    "description": "Reads one paper closely and produces a structured interpretation report with page-and-section anchors, then answers questions about the same paper from the shared parse. PDF only; figure crops are heuristic and formulas are re-typed as LaTeX rather than OCR'd.",
+    "detail": "docs/DETAIL.md"
+  }
+}

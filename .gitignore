@@ -63,6 +63,7 @@ credentials*.yml
 docs/*
 !docs/*.md
 !docs/images/
+!docs/preview.svg
 # 显式拦住证据类路径：即使上面的白名单将来被放宽，这些也仍然不入库
 docs/screenshots/
 docs/capture/

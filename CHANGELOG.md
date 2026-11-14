@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### 新增：插件面板显示元数据
+
+- **新增图标、中英文标题与说明、详情页与 640×300 预览图。** `package.json` 导出 `./icon` 与 `./locale/*.json`，`files` 收录这些文件与 `LICENSE`。
+
 ### 变更：兼容 DSH 0.2.2 的投影读法
 
 - **档位判定不再只认注册表。** 0.2.1-rc.2 起注册表级 `sessionProjections.stateOf()` 被弃用，改为
